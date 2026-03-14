@@ -20,7 +20,7 @@ A robust and scalable Inventory and Warehouse Management System designed for eff
 **Backend:**
 - [FastAPI](https://fastapi.tiangolo.com/): High-performance web framework for building APIs with Python.
 - [SQLAlchemy](https://www.sqlalchemy.org/): SQL Toolkit and Object-Relational Mapper.
-- [SQLite/PostgreSQL]: Database for reliable data persistence.
+- [PostgreSQL/SQLite]: Database for reliable data persistence.
 
 **Frontend:**
 - [React](https://reactjs.org/): For a dynamic and responsive UI.
