@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --odoo-purple: #714B67;
+  --odoo-purple-dark: #5B3A53;
+  --odoo-purple-light: #8C6580;
+  --odoo-teal: #00A09D;
+  --odoo-teal-dark: #008784;
+  --odoo-teal-light: #00BBB7;
+  --odoo-bg: #F0EEEF;
+  --odoo-white: #FFFFFF;
+  --odoo-text: #212529;
+  --odoo-text-muted: #6C757D;
+  --odoo-border: #DEE2E6;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--odoo-bg);
+  color: var(--odoo-text);
+  margin: 0;
+}
+
+@media print {
+  header, .print\\:hidden { display: none !important; }
+  body { background: white; }
+  .bg-white { box-shadow: none !important; border: none !important; }
+}
