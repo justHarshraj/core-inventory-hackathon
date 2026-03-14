@@ -134,6 +134,11 @@ class StockPickingCreate(BaseModel):
     scheduled_date: Optional[datetime] = None
     moves: List[StockMoveCreate]
 
+class StockPickingUpdate(BaseModel):
+    location_id: Optional[int] = None
+    location_dest_id: Optional[int] = None
+    scheduled_date: Optional[datetime] = None
+
 class StockMoveResponse(BaseModel):
     id: int
     picking_id: Optional[int]

@@ -12,6 +12,7 @@ export default function Products() {
   const [newCategory, setNewCategory] = useState({ name: "", description: "" });
   const [adjustingId, setAdjustingId] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
   const [adjustQuantity, setAdjustQuantity] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -82,13 +83,32 @@ export default function Products() {
   const handleCreateCategory = async (e) => {
     e.preventDefault();
     try {
-      await API.post("/products/categories", newCategory);
-      setShowCategoryModal(false);
+      if (editingCategoryId) {
+        await API.put(`/products/categories/${editingCategoryId}`, newCategory);
+      } else {
+        await API.post("/products/categories", newCategory);
+      }
+      setEditingCategoryId(null);
       setNewCategory({ name: "", description: "" });
       fetchData();
     } catch (err) {
-      console.error("Create category error:", err);
-      alert("Failed to create category");
+      console.error("Category action error:", err);
+      alert(editingCategoryId ? "Failed to update category" : "Failed to create category");
+    }
+  };
+
+  const handleEditCategory = (cat) => {
+    setEditingCategoryId(cat.id);
+    setNewCategory({ name: cat.name, description: cat.description || "" });
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this category?")) return;
+    try {
+      await API.delete(`/products/categories/${id}`);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to delete category.");
     }
   };
 
@@ -314,25 +334,55 @@ export default function Products() {
         </div>
       )}
 
-      {/* Add Category Modal */}
       {showCategoryModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl w-full max-w-sm p-8 shadow-xl border" style={{ borderColor: 'var(--odoo-border)' }}>
-            <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--odoo-purple)' }}>Add Category</h2>
-            <form onSubmit={handleCreateCategory} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--odoo-text)' }}>Name</label>
-                <input required type="text" className="w-full border p-2 rounded-lg focus:outline-none focus:ring-2 text-sm" style={{ borderColor: 'var(--odoo-border)', '--tw-ring-color': 'var(--odoo-purple)' }} value={newCategory.name} onChange={e => setNewCategory({...newCategory, name: e.target.value})} />
+          <div className="bg-white rounded-xl w-full max-w-md p-8 shadow-xl border relative" style={{ borderColor: 'var(--odoo-border)' }}>
+            <button 
+              onClick={() => { setShowCategoryModal(false); setEditingCategoryId(null); setNewCategory({ name: "", description: "" }); }}
+              className="absolute top-4 right-4 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              style={{ color: 'var(--odoo-text-muted)' }}
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--odoo-purple)' }}>Manage Categories</h2>
+            
+            <form onSubmit={handleCreateCategory} className="space-y-4 mb-8 pb-8 border-b" style={{ borderColor: 'var(--odoo-border)' }}>
+              <div className="flex gap-4 items-end">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--odoo-text)' }}>Name</label>
+                  <input required type="text" className="w-full border p-2 rounded-lg focus:outline-none focus:ring-2 text-sm" style={{ borderColor: 'var(--odoo-border)', '--tw-ring-color': 'var(--odoo-purple)' }} value={newCategory.name} onChange={e => setNewCategory({...newCategory, name: e.target.value})} />
+                </div>
+                <button type="submit" className="px-4 py-2 rounded-lg text-white text-sm font-medium hover:opacity-90 h-[38px]" style={{ backgroundColor: 'var(--odoo-purple)' }}>
+                  {editingCategoryId ? "Update" : "Add"}
+                </button>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--odoo-text)' }}>Description</label>
                 <input type="text" className="w-full border p-2 rounded-lg focus:outline-none focus:ring-2 text-sm" style={{ borderColor: 'var(--odoo-border)', '--tw-ring-color': 'var(--odoo-purple)' }} value={newCategory.description} onChange={e => setNewCategory({...newCategory, description: e.target.value})} />
               </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setShowCategoryModal(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm font-medium" style={{ borderColor: 'var(--odoo-border)', color: 'var(--odoo-text)' }}>Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-lg text-white text-sm font-medium hover:opacity-90" style={{ backgroundColor: 'var(--odoo-purple)' }}>Save Category</button>
-              </div>
             </form>
+
+            <div className="max-h-60 overflow-y-auto pr-2">
+              <h3 className="text-sm font-bold mb-3 uppercase tracking-wider" style={{ color: 'var(--odoo-text-muted)' }}>Existing Categories</h3>
+              <div className="space-y-2">
+                {categories.map(cat => (
+                  <div key={cat.id} className="flex items-center justify-between p-3 rounded-lg border bg-gray-50 group transition-colors hover:border-[#ddd]" style={{ borderColor: 'var(--odoo-border)' }}>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--odoo-text)' }}>{cat.name}</p>
+                      {cat.description && <p className="text-xs italic" style={{ color: 'var(--odoo-text-muted)' }}>{cat.description}</p>}
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => handleEditCategory(cat)} className="p-1 hover:bg-gray-200 rounded transition-colors" style={{ color: 'var(--odoo-purple)' }}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteCategory(cat.id)} className="p-1 hover:bg-red-100 rounded transition-colors" style={{ color: '#DC3545' }}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

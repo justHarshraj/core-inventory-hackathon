@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import API from "../services/api";
-import { Search, LayoutList, LayoutGrid } from "lucide-react";
+import { Search, LayoutList, LayoutGrid, Edit2, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function Operations({ type }) {
@@ -9,11 +9,13 @@ export default function Operations({ type }) {
   const [viewMode, setViewMode] = useState("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [products, setProducts] = useState([]);
   const [newPicking, setNewPicking] = useState({ 
     location_id: "", 
     location_dest_id: "", 
-    moves: [{ product_id: "", quantity: 1 }] 
+    moves: [{ product_id: "", quantity: 1 }],
+    scheduled_date: new Date().toISOString().split('T')[0]
   });
   
   const navigate = useNavigate();
@@ -25,7 +27,7 @@ export default function Operations({ type }) {
         API.get("/inventory/locations"),
         API.get("/products")
       ]);
-      setPickings(pickRes.data.filter(p => p.type === type).sort((a,b) => b.id - a.id));
+      setPickings(pickRes.data.filter(p => p.type === type));
       setLocations(locRes.data);
       setProducts(prodRes.data);
     } catch (err) {
@@ -40,22 +42,65 @@ export default function Operations({ type }) {
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
-      await API.post("/inventory/picking", {
-        ...newPicking,
-        type: type,
+      const payload = {
         location_id: parseInt(newPicking.location_id),
         location_dest_id: parseInt(newPicking.location_dest_id),
-        moves: newPicking.moves.map(m => ({ 
-          product_id: parseInt(m.product_id), 
-          quantity: parseFloat(m.quantity) 
-        }))
-      });
-      setShowModal(false);
+        scheduled_date: newPicking.scheduled_date
+      };
+
+      if (editingId) {
+        await API.put(`/inventory/picking/${editingId}`, payload);
+      } else {
+        await API.post("/inventory/picking", {
+          ...payload,
+          type: type,
+          moves: newPicking.moves.map(m => ({ 
+            product_id: parseInt(m.product_id), 
+            quantity: parseFloat(m.quantity) 
+          }))
+        });
+      }
+      
+      handleCloseModal();
       fetchData();
     } catch (err) {
-      console.error("Create picking error:", err);
-      alert("Failed to create operation.");
+      console.error("Picking action error:", err);
+      alert(`Failed to ${editingId ? 'update' : 'create'} operation.`);
     }
+  };
+
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this operation?")) return;
+    try {
+      await API.delete(`/inventory/picking/${id}`);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to delete operation.");
+    }
+  };
+
+  const handleEdit = (e, p) => {
+    e.stopPropagation();
+    setEditingId(p.id);
+    setNewPicking({
+      location_id: p.location_id,
+      location_dest_id: p.location_dest_id,
+      scheduled_date: p.scheduled_date.split('T')[0],
+      moves: p.moves // Note: Moves aren't editable via header update but stored for context
+    });
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingId(null);
+    setNewPicking({ 
+      location_id: "", 
+      location_dest_id: "", 
+      moves: [{ product_id: "", quantity: 1 }],
+      scheduled_date: new Date().toISOString().split('T')[0]
+    });
   };
 
   const getContact = (p) => {
@@ -75,6 +120,7 @@ export default function Operations({ type }) {
     if (status === "Ready") return "bg-blue-100 text-blue-700 border-blue-300";
     if (status === "Waiting") return "bg-yellow-100 text-yellow-700 border-yellow-300";
     if (status === "Draft") return "bg-gray-100 text-gray-600 border-gray-300";
+    if (status === "Cancelled") return "bg-red-100 text-red-600 border-red-300";
     return "bg-gray-100 text-gray-500 border-gray-300";
   };
 
@@ -143,6 +189,7 @@ export default function Operations({ type }) {
                 <th className="px-4 py-3">Contact</th>
                 <th className="px-4 py-3">Schedule date</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="text-sm">
@@ -161,11 +208,33 @@ export default function Operations({ type }) {
                   <td className="px-4 py-3">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColor(p.status)}`}>{p.status}</span>
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {p.status !== "Done" && (
+                        <button 
+                          onClick={(e) => handleEdit(e, p)}
+                          className="p-1.5 rounded hover:bg-gray-100 transition-colors"
+                          style={{ color: 'var(--odoo-purple)' }}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {p.status !== "Done" && (
+                        <button 
+                          onClick={(e) => handleDelete(e, p.id)}
+                          className="p-1.5 rounded hover:bg-red-50 transition-colors"
+                          style={{ color: '#DC3545' }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
               {filteredPickings.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="text-center py-8" style={{ color: 'var(--odoo-text-muted)' }}>No operations found.</td>
+                  <td colSpan="7" className="text-center py-8" style={{ color: 'var(--odoo-text-muted)' }}>No operations found.</td>
                 </tr>
               )}
             </tbody>
@@ -185,7 +254,7 @@ export default function Operations({ type }) {
                     <div 
                       key={p.id} 
                       onClick={() => navigate(`/operations/${type === 'Delivery' ? 'deliveries' : type === 'Internal' ? 'transfers' : type.toLowerCase() + 's'}/${p.id}`)}
-                      className="bg-white border rounded-lg p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                      className="bg-white border rounded-lg p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow relative group"
                       style={{ borderColor: 'var(--odoo-border)' }}
                     >
                       <div className="flex justify-between items-start mb-2">
@@ -193,6 +262,15 @@ export default function Operations({ type }) {
                         <span className="text-xs" style={{ color: 'var(--odoo-text-muted)' }}>{new Date(p.scheduled_date).toLocaleDateString()}</span>
                       </div>
                       <div className="text-sm" style={{ color: 'var(--odoo-text-muted)' }}>{getContact(p)}</div>
+                      
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        {p.status !== "Done" && (
+                          <button onClick={(e) => handleEdit(e, p)} className="p-1 bg-white border rounded shadow-sm" style={{ color: 'var(--odoo-purple)' }}><Edit2 className="w-3 h-3"/></button>
+                        )}
+                        {p.status !== "Done" && (
+                          <button onClick={(e) => handleDelete(e, p.id)} className="p-1 bg-white border rounded shadow-sm" style={{ color: '#DC3545' }}><Trash2 className="w-3 h-3"/></button>
+                        )}
+                      </div>
                     </div>
                   ))}
                   {items.length === 0 && (
@@ -207,8 +285,14 @@ export default function Operations({ type }) {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl w-full max-w-lg p-8 shadow-xl border" style={{ borderColor: 'var(--odoo-border)' }}>
-            <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--odoo-purple)' }}>Create {type}</h2>
+          <div className="bg-white rounded-xl w-full max-w-lg p-8 shadow-xl border relative" style={{ borderColor: 'var(--odoo-border)' }}>
+            <button 
+              onClick={handleCloseModal}
+              className="absolute top-4 right-4 p-1 rounded-lg hover:bg-gray-100 transition-colors text-gray-400"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--odoo-purple)' }}>{editingId ? "Edit" : "Create"} {type}</h2>
             <form onSubmit={handleCreate} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -227,32 +311,50 @@ export default function Operations({ type }) {
                 </div>
               </div>
 
-              <div className="border p-6 rounded-xl" style={{ borderColor: 'var(--odoo-border)', backgroundColor: 'var(--odoo-bg)' }}>
-                <h3 className="font-medium text-sm mb-4" style={{ color: 'var(--odoo-purple)' }}>Item to Move</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-2">
-                    <select required className="w-full border p-2 rounded-lg focus:outline-none focus:ring-2 text-sm" style={{ borderColor: 'var(--odoo-border)', '--tw-ring-color': 'var(--odoo-purple)' }} value={newPicking.moves[0].product_id} onChange={e => {
-                        const newMoves = [...newPicking.moves];
-                        newMoves[0].product_id = e.target.value;
-                        setNewPicking({...newPicking, moves: newMoves});
-                      }}>
-                      <option value="">Select Product...</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <input type="number" step="0.01" min="0.01" required placeholder="Qty" className="w-full border p-2 rounded-lg focus:outline-none focus:ring-2 text-sm" style={{ borderColor: 'var(--odoo-border)', '--tw-ring-color': 'var(--odoo-purple)' }} value={newPicking.moves[0].quantity} onChange={e => {
-                        const newMoves = [...newPicking.moves];
-                        newMoves[0].quantity = parseFloat(e.target.value);
-                        setNewPicking({...newPicking, moves: newMoves});
-                      }} />
-                  </div>
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--odoo-text)' }}>Scheduled Date</label>
+                <input 
+                  type="date"
+                  required
+                  className="w-full border p-2 rounded-lg focus:outline-none focus:ring-2 text-sm" 
+                  style={{ borderColor: 'var(--odoo-border)', '--tw-ring-color': 'var(--odoo-purple)' }} 
+                  value={newPicking.scheduled_date} 
+                  onChange={e => setNewPicking({...newPicking, scheduled_date: e.target.value})}
+                />
               </div>
 
+              {!editingId && (
+                <div className="border p-6 rounded-xl" style={{ borderColor: 'var(--odoo-border)', backgroundColor: 'var(--odoo-bg)' }}>
+                  <h3 className="font-medium text-sm mb-4" style={{ color: 'var(--odoo-purple)' }}>Item to Move</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-2">
+                      <select required className="w-full border p-2 rounded-lg focus:outline-none focus:ring-2 text-sm" style={{ borderColor: 'var(--odoo-border)', '--tw-ring-color': 'var(--odoo-purple)' }} value={newPicking.moves[0].product_id} onChange={e => {
+                          const newMoves = [...newPicking.moves];
+                          newMoves[0].product_id = e.target.value;
+                          setNewPicking({...newPicking, moves: newMoves});
+                        }}>
+                        <option value="">Select Product...</option>
+                        {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <input type="number" step="0.01" min="0.01" required placeholder="Qty" className="w-full border p-2 rounded-lg focus:outline-none focus:ring-2 text-sm" style={{ borderColor: 'var(--odoo-border)', '--tw-ring-color': 'var(--odoo-purple)' }} value={newPicking.moves[0].quantity} onChange={e => {
+                          const newMoves = [...newPicking.moves];
+                          newMoves[0].quantity = parseFloat(e.target.value);
+                          setNewPicking({...newPicking, moves: newMoves});
+                        }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {editingId && (
+                <p className="text-xs text-gray-500 italic">Note: Products can be modified on the individual operation page.</p>
+              )}
+
               <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm font-medium" style={{ borderColor: 'var(--odoo-border)', color: 'var(--odoo-text)' }}>Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-lg text-white text-sm font-medium hover:opacity-90" style={{ backgroundColor: 'var(--odoo-purple)' }}>Save</button>
+                <button type="button" onClick={handleCloseModal} className="px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm font-medium" style={{ borderColor: 'var(--odoo-border)', color: 'var(--odoo-text)' }}>Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded-lg text-white text-sm font-medium hover:opacity-90" style={{ backgroundColor: 'var(--odoo-purple)' }}>{editingId ? "Update" : "Save"}</button>
               </div>
             </form>
           </div>
@@ -261,3 +363,4 @@ export default function Operations({ type }) {
     </div>
   );
 }
+

@@ -155,6 +155,22 @@ export default function ReceiptDetail() {
                 Cancel
               </button>
             )}
+            {!isDone && (
+              <button 
+                onClick={async () => {
+                  if (!window.confirm("Are you sure you want to delete this operation?")) return;
+                  try {
+                    await API.delete(`/inventory/picking/${picking.id}`);
+                    navigate(-1);
+                  } catch (err) {
+                    alert(err.response?.data?.detail || "Failed to delete.");
+                  }
+                }}
+                className="px-4 py-2 border rounded-lg font-medium text-sm border-red-200 text-red-500 hover:bg-red-50 transition-colors" 
+              >
+                Delete
+              </button>
+            )}
           </div>
 
           <div className="flex items-center space-x-2 border rounded-full px-5 py-2 bg-white" style={{ borderColor: 'var(--odoo-border)' }}>

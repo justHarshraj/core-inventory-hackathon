@@ -32,6 +32,16 @@ export default function History() {
     }
   };
 
+  const handleDeleteIndividual = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this specific record?")) return;
+    try {
+      await API.delete(`/inventory/picking/${id}`);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to delete record.");
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -129,9 +139,10 @@ export default function History() {
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Contact</th>
                 <th className="px-4 py-3">From</th>
-                <th className="px-4 py-3">To</th>
+                 <th className="px-4 py-3">To</th>
                 <th className="px-4 py-3">Quantity</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="text-sm">
@@ -146,11 +157,21 @@ export default function History() {
                   <td className="px-4 py-3">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColor(p.status)}`}>{p.status}</span>
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <button 
+                      onClick={() => handleDeleteIndividual(p.id)}
+                      className="p-1.5 rounded hover:bg-red-50 transition-colors"
+                      style={{ color: '#DC3545' }}
+                      title="Delete Record"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
-              {filteredPickings.length === 0 && (
+               {filteredPickings.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="text-center py-8" style={{ color: 'var(--odoo-text-muted)' }}>No history found.</td>
+                  <td colSpan="8" className="text-center py-8" style={{ color: 'var(--odoo-text-muted)' }}>No history found.</td>
                 </tr>
               )}
             </tbody>
@@ -175,7 +196,16 @@ export default function History() {
                       <div className="text-sm mb-2" style={{ color: 'var(--odoo-text-muted)' }}>{getContact(p)}</div>
                       <div className="flex justify-between items-center text-xs mt-3 pt-3 border-t" style={{ borderColor: 'var(--odoo-border)' }}>
                         <span>Qty: <strong>{getQuantity(p)}</strong></span>
-                        <span className="px-2 py-0.5 rounded-full font-semibold text-white text-xs" style={{ backgroundColor: p.type === 'Receipt' ? '#28A745' : '#DC3545' }}>{p.type}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full font-semibold text-white text-xs" style={{ backgroundColor: p.type === 'Receipt' ? '#28A745' : '#DC3545' }}>{p.type}</span>
+                          <button 
+                            onClick={() => handleDeleteIndividual(p.id)}
+                            className="p-1 rounded hover:bg-red-50 text-red-500 transition-colors"
+                            title="Delete Record"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}

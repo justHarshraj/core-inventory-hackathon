@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import API from "../services/api";
-import { Plus, CheckCircle } from "lucide-react";
+import { Plus, CheckCircle, Trash2, Edit2, X } from "lucide-react";
 
 export default function Adjustments() {
   const [adjustments, setAdjustments] = useState([]);
   const [products, setProducts] = useState([]);
   const [locations, setLocations] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [lines, setLines] = useState([{ product_id: "", location_id: "", counted_quantity: "" }]);
 
   const fetchData = async () => {
@@ -31,18 +32,24 @@ export default function Adjustments() {
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
-      await API.post("/inventory/adjustments", {
+      const payload = {
         lines: lines.map(l => ({
           product_id: parseInt(l.product_id),
           location_id: parseInt(l.location_id),
           counted_quantity: parseFloat(l.counted_quantity)
         }))
-      });
-      setShowModal(false);
-      setLines([{ product_id: "", location_id: "", counted_quantity: "" }]);
+      };
+
+      if (editingId) {
+        await API.put(`/inventory/adjustments/${editingId}`, payload);
+      } else {
+        await API.post("/inventory/adjustments", payload);
+      }
+      
+      handleCloseModal();
       fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to create adjustment.");
+      alert(err.response?.data?.detail || `Failed to ${editingId ? 'update' : 'create'} adjustment.`);
     }
   };
 
@@ -56,6 +63,16 @@ export default function Adjustments() {
     }
   };
 
+  const handleDelete = async (adjId) => {
+    if (!window.confirm("Are you sure you want to delete this adjustment?")) return;
+    try {
+      await API.delete(`/inventory/adjustments/${adjId}`);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to delete.");
+    }
+  };
+
   const addLine = () => {
     setLines([...lines, { product_id: "", location_id: "", counted_quantity: "" }]);
   };
@@ -64,6 +81,22 @@ export default function Adjustments() {
     const updated = [...lines];
     updated[index][field] = value;
     setLines(updated);
+  };
+
+  const handleEdit = (adj) => {
+    setEditingId(adj.id);
+    setLines(adj.lines.map(l => ({
+      product_id: l.product_id,
+      location_id: l.location_id,
+      counted_quantity: l.counted_quantity
+    })));
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingId(null);
+    setLines([{ product_id: "", location_id: "", counted_quantity: "" }]);
   };
 
   const removeLine = (index) => {
@@ -125,15 +158,36 @@ export default function Adjustments() {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  {adj.status === "Draft" && (
-                    <button 
-                      onClick={() => handleValidate(adj.id)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-xs font-medium hover:opacity-90"
-                      style={{ backgroundColor: 'var(--odoo-teal)' }}
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" /> Apply
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {adj.status === "Draft" && (
+                      <>
+                        <button 
+                          onClick={() => handleValidate(adj.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-xs font-medium hover:opacity-90"
+                          style={{ backgroundColor: 'var(--odoo-teal)' }}
+                          title="Apply Adjustment"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" /> Apply
+                        </button>
+                        <button 
+                          onClick={() => handleEdit(adj)}
+                          className="p-1.5 rounded hover:bg-gray-100 transition-colors"
+                          style={{ color: 'var(--odoo-purple)' }}
+                          title="Edit Adjustment"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(adj.id)}
+                          className="p-1.5 rounded hover:bg-red-50 transition-colors"
+                          style={{ color: '#DC3545' }}
+                          title="Delete Adjustment"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -149,8 +203,14 @@ export default function Adjustments() {
       {/* Create Adjustment Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl w-full max-w-2xl p-8 shadow-xl border" style={{ borderColor: 'var(--odoo-border)' }}>
-            <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--odoo-purple)' }}>New Stock Adjustment</h2>
+          <div className="bg-white rounded-xl w-full max-w-2xl p-8 shadow-xl border relative" style={{ borderColor: 'var(--odoo-border)' }}>
+            <button 
+              onClick={handleCloseModal}
+              className="absolute top-4 right-4 p-1 rounded-lg hover:bg-gray-100 transition-colors text-gray-400"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--odoo-purple)' }}>{editingId ? "Edit" : "New"} Stock Adjustment</h2>
             <p className="text-sm mb-6" style={{ color: 'var(--odoo-text-muted)' }}>Select a product and location, then enter the physical counted quantity. The system will calculate the difference automatically.</p>
             <form onSubmit={handleCreate} className="space-y-4">
               {lines.map((line, idx) => (
@@ -182,8 +242,8 @@ export default function Adjustments() {
               ))}
               <button type="button" onClick={addLine} className="text-sm font-semibold hover:underline" style={{ color: 'var(--odoo-teal)' }}>+ Add another line</button>
               <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm font-medium" style={{ borderColor: 'var(--odoo-border)', color: 'var(--odoo-text)' }}>Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-lg text-white text-sm font-medium hover:opacity-90" style={{ backgroundColor: 'var(--odoo-purple)' }}>Create Adjustment</button>
+                <button type="button" onClick={handleCloseModal} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm font-medium" style={{ borderColor: 'var(--odoo-border)', color: 'var(--odoo-text)' }}>Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded-lg text-white text-sm font-medium hover:opacity-90" style={{ backgroundColor: 'var(--odoo-purple)' }}>{editingId ? "Update" : "Create"} Adjustment</button>
               </div>
             </form>
           </div>

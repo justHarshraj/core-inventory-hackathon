@@ -208,7 +208,37 @@ def add_move_to_picking(picking_id: int, move: schemas.StockMoveCreate, db: Sess
 
 @router.get("/picking", response_model=List[schemas.StockPickingResponse])
 def get_pickings(db: Session = Depends(get_db)):
-    return db.query(models.StockPicking).all()
+    return db.query(models.StockPicking).order_by(models.StockPicking.id.desc()).all()
+
+@router.put("/picking/{picking_id}", response_model=schemas.StockPickingResponse)
+def update_picking(picking_id: int, picking_update: schemas.StockPickingUpdate, db: Session = Depends(get_db)):
+    db_picking = db.query(models.StockPicking).filter(models.StockPicking.id == picking_id).first()
+    if not db_picking:
+        raise HTTPException(status_code=404, detail="Picking not found")
+    if db_picking.status == models.PickingStatus.DONE:
+        raise HTTPException(status_code=400, detail="Cannot edit a completed operation")
+    
+    update_data = picking_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_picking, key, value)
+    
+    db.commit()
+    db.refresh(db_picking)
+    return db_picking
+
+@router.delete("/picking/{picking_id}")
+def delete_picking(picking_id: int, db: Session = Depends(get_db)):
+    db_picking = db.query(models.StockPicking).filter(models.StockPicking.id == picking_id).first()
+    if not db_picking:
+        raise HTTPException(status_code=404, detail="Picking not found")
+    if db_picking.status == models.PickingStatus.DONE:
+        raise HTTPException(status_code=400, detail="Cannot delete a completed operation")
+    
+    # Delete associated moves first
+    db.query(models.StockMove).filter(models.StockMove.picking_id == picking_id).delete()
+    db.delete(db_picking)
+    db.commit()
+    return {"message": "Operation deleted successfully"}
 
 @router.delete("/picking/history")
 def clear_picking_history(db: Session = Depends(get_db)):
@@ -309,4 +339,42 @@ def validate_adjustment(adj_id: int, db: Session = Depends(get_db)):
     adj.status = models.PickingStatus.DONE
     db.commit()
     return {"message": "Adjustment validated and stock updated"}
+
+@router.delete("/adjustments/{adj_id}")
+def delete_adjustment(adj_id: int, db: Session = Depends(get_db)):
+    adj = db.query(models.StockAdjustment).filter_by(id=adj_id).first()
+    if not adj:
+        raise HTTPException(status_code=404, detail="Adjustment not found")
+    if adj.status == models.PickingStatus.DONE:
+        raise HTTPException(status_code=400, detail="Cannot delete a validated adjustment")
+    
+    # Delete lines first
+    db.query(models.StockAdjustmentLine).filter_by(adjustment_id=adj_id).delete()
+    db.delete(adj)
+    db.commit()
+    return {"message": "Adjustment deleted successfully"}
+
+@router.put("/adjustments/{adj_id}")
+def update_adjustment(adj_id: int, adj_update: schemas.StockAdjustmentCreate, db: Session = Depends(get_db)):
+    adj = db.query(models.StockAdjustment).filter_by(id=adj_id).first()
+    if not adj:
+        raise HTTPException(status_code=404, detail="Adjustment not found")
+    if adj.status == models.PickingStatus.DONE:
+        raise HTTPException(status_code=400, detail="Cannot edit a validated adjustment")
+    
+    # Simple approach: clear old lines and add new ones
+    db.query(models.StockAdjustmentLine).filter_by(adjustment_id=adj_id).delete()
+    
+    for line in adj_update.lines:
+        db_line = models.StockAdjustmentLine(
+            adjustment_id=adj_id,
+            product_id=line.product_id,
+            location_id=line.location_id,
+            theoretical_quantity=0, # Will be recalculated on validation
+            counted_quantity=line.counted_quantity
+        )
+        db.add(db_line)
+    
+    db.commit()
+    return {"message": "Adjustment updated successfully"}
 
